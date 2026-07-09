@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Writing Heatmap Dashboard</title>
+  <style>
+    :root{
+      --bg:#f6f6f4; --panel:#fff; --text:#202124; --muted:#8a8f98;
+      --line:#ececec; --green:#24b36b; --light-green:#bfe9d1; --cell:#eeeeee;
+      --shadow:0 12px 40px rgba(0,0,0,.06);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;
+      background:#111; color:var(--text); display:flex; align-items:center; justify-content:center; padding:28px;
+    }
+    .app{
+      width:min(1180px,100%); min-height:780px; background:var(--panel); border-radius:18px; overflow:hidden;
+      display:grid; grid-template-columns:260px 1fr; box-shadow:var(--shadow);
+    }
+    .sidebar{background:var(--bg); border-right:1px solid var(--line); padding:22px 18px}
+    .traffic{display:flex;gap:9px;margin-bottom:26px}.dot{width:13px;height:13px;border-radius:50%}
+    .red{background:#ff5f57}.yellow{background:#febc2e}.green-dot{background:#28c840}
+    .back{color:#777;font-size:14px;margin-bottom:18px}
+    .search{height:34px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#aaa;padding:7px 12px;margin-bottom:22px;font-size:14px}
+    .group-title{color:#aaa;font-size:13px;font-weight:700;margin:20px 0 8px}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;font-size:15px;color:#333;margin:2px 0}
+    .nav-item.active{background:#e8e8e8;font-weight:600}
+    .main{padding:24px 44px 40px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#555}
+    .actions{display:flex;gap:20px;font-weight:600}
+    .profile{text-align:center;margin-top:42px}
+    .avatar{width:78px;height:78px;border-radius:50%;background:var(--green);color:white;display:grid;place-items:center;margin:0 auto 18px;font-size:30px;font-weight:500}
+    h1{font-size:26px;font-weight:500;margin:0 0 6px}.handle{color:#9aa0a6;font-size:14px}
+    .stats{margin:34px auto 28px;max-width:780px;border:1px solid var(--line);border-radius:16px;display:grid;grid-template-columns:repeat(5,1fr);overflow:hidden;background:#fff}
+    .stat{padding:14px 10px;text-align:center;border-right:1px solid var(--line)}.stat:last-child{border-right:0}
+    .num{font-size:16px;margin-bottom:4px}.label{font-size:13px;color:#757575}
+    .section{max-width:780px;margin:0 auto}
+    .section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    .section-title{font-weight:700;font-size:15px}
+    .legend{display:flex;gap:16px;color:#666;font-size:14px;align-items:center}
+    .legend span{display:inline-flex;gap:6px;align-items:center}
+    .mini{width:11px;height:11px;border-radius:3px;background:var(--cell)}.mini.light{background:var(--light-green)}.mini.full{background:var(--green)}
+    .range-card{
+      display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:end;
+      border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:20px;background:#fff;
+    }
+    .field label{display:block;font-size:12px;color:#777;margin-bottom:6px}
+    input{width:100%;border:1px solid #ddd;border-radius:12px;padding:11px 12px;font-size:15px;font-family:inherit}
+    button{height:42px;border:0;border-radius:12px;background:#202124;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:14px}
+    .heatmap-wrap{display:flex;flex-direction:column;align-items:center;overflow-x:auto;padding-bottom:10px}
+    .weekdays-top{
+      display:grid; grid-template-columns:repeat(7,46px); gap:12px;
+      width:max-content; color:#8a8a8a; font-size:13px; text-align:center; margin-bottom:12px;
+    }
+    .heatmap{
+      display:grid;
+      grid-template-columns:repeat(7,46px);
+      gap:12px;
+      width:max-content;
+    }
+    .cell{
+      width:46px;height:46px;border-radius:12px;background:var(--cell);
+      cursor:pointer;position:relative;
+    }
+    .cell.pad{opacity:.22;cursor:default}
+    .cell.light{background:var(--light-green);opacity:1}
+    .cell.full{background:var(--green);opacity:1}
+    .cell:hover:not(.pad){outline:2px solid #aaa}
+    .panel-grid{max-width:780px;margin:26px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:46px}
+    .analysis-row{display:flex;justify-content:space-between;margin:14px 0;font-size:15px}
+    .analysis-row span:first-child{color:#666}
+    .input-card{border:1px solid var(--line);border-radius:18px;padding:18px;background:#fff}
+    .form-row{display:grid;grid-template-columns:1fr 120px;gap:10px;margin-top:12px}
+    .hint{color:#858585;font-size:13px;line-height:1.7;margin-top:12px}.recent{margin-top:14px;font-size:14px;color:#555;line-height:1.8}
+    @media (max-width:850px){
+      body{padding:0;background:white}.app{grid-template-columns:1fr;border-radius:0;min-height:100vh}.sidebar{display:none}.main{padding:22px}.profile{margin-top:34px}
+      .stats{grid-template-columns:1fr 1fr}.panel-grid{grid-template-columns:1fr;gap:18px}.range-card{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="traffic"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green-dot"></div></div>
+      <div class="back">← 返回應用程式</div><div class="search">⌕ 搜尋設定...</div>
+      <div class="group-title">個人</div>
+      <div class="nav-item">⚙ 一般</div><div class="nav-item active">◎ 寫作紀錄</div><div class="nav-item">☼ 外觀</div><div class="nav-item">⌘ 快捷鍵</div>
+      <div class="group-title">儀表板</div>
+      <div class="nav-item">▦ Custom Heatmap</div><div class="nav-item">✎ Writing Goal</div><div class="nav-item">↗ Export</div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar"><div>寫作資料</div><div class="actions"><span>↥ 分享</span><span>▣ 私密</span><span>✎ 編輯</span></div></div>
+      <section class="profile"><div class="avatar">W</div><h1>奚 日青</h1><div class="handle">@writinglog · private dashboard</div></section>
+
+      <section class="stats">
+        <div class="stat"><div class="num" id="totalWords">0</div><div class="label">累計字數</div></div>
+        <div class="stat"><div class="num" id="bestWords">0</div><div class="label">單日峰值</div></div>
+        <div class="stat"><div class="num" id="avgWords">0</div><div class="label">平均字數</div></div>
+        <div class="stat"><div class="num" id="currentStreak">0 天</div><div class="label">目前連續紀錄</div></div>
+        <div class="stat"><div class="num" id="bestStreak">0 天</div><div class="label">最長連續紀錄</div></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="section-title" id="rangeTitle">Writing 活動</div>
+          <div class="legend"><span><i class="mini"></i>沒寫</span><span><i class="mini light"></i>1–999</span><span><i class="mini full"></i>1000+</span></div>
+        </div>
+
+        <div class="range-card">
+          <div class="field"><label>選擇月份</label><input id="monthPicker" type="month"></div>
+          <button onclick="applyMonth()">查看月份</button>
+        </div>
+
+        <div class="heatmap-wrap">
+          <div class="weekdays-top"><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+      </section>
+
+      <section class="panel-grid">
+        <div>
+          <div class="section-title">本月分析</div>
+          <div class="analysis-row"><span>有寫天數</span><b id="writtenDays">0</b></div>
+          <div class="analysis-row"><span>1000+ 天數</span><b id="fullDays">0</b></div>
+          <div class="analysis-row"><span>本月字數</span><b id="rangeWords">0</b></div>
+          <div class="analysis-row"><span>達標率</span><b id="goalRate">0%</b></div>
+          <div class="analysis-row"><span>今日狀態</span><b id="todayStatus">尚未紀錄</b></div>
+        </div>
+
+        <div class="input-card">
+          <div class="section-title">新增／更新字數</div>
+          <div class="form-row"><input id="dateInput" type="date"><input id="wordInput" type="number" min="0" placeholder="字數"></div>
+          <div class="form-row"><button onclick="saveEntry()">儲存紀錄</button><button onclick="clearEntry()">清除當日</button></div>
+          <div class="hint">規則：1000 字以上亮綠色；1–999 字亮淺綠色；0 或未填寫為灰色。六日也會顯示小方塊。資料會存在這個瀏覽器的 localStorage。</div>
+          <div class="recent" id="recent"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const DEFAULT_START = new Date("2026-07-06T00:00:00");
+    const DEFAULT_END = new Date("2027-07-05T00:00:00");
+    const STORAGE_KEY = "writing-dashboard-records-v1";
+    let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    let activeMonth = "2026-07";
+    let viewStart = new Date(DEFAULT_START);
+    let viewEnd = new Date("2026-07-31T00:00:00");
+
+    function fmt(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+    function displayDate(s){ return s.replaceAll("-","/"); }
+    function parseDate(s){ return new Date(s+"T00:00:00"); }
+    function monthKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+    function monthRange(key){
+      const [y,m] = key.split("-").map(Number);
+      const start = new Date(y, m-1, 1);
+      const end = new Date(y, m, 0);
+      if(key === "2026-07") start.setDate(6);
+      if(key === "2027-07") end.setDate(5);
+      return {start, end};
+    }
+    function setActiveMonth(key){
+      activeMonth = key;
+      const range = monthRange(key);
+      viewStart = range.start;
+      viewEnd = range.end;
+      document.getElementById("monthPicker").value = key;
+    }
+    function statusClass(words){ if(words >= 1000) return "full"; if(words > 0) return "light"; return ""; }
+    function today(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+
+    function datesInRange(start, end){
+      const arr=[]; const d=new Date(start);
+      while(d<=end){ arr.push(new Date(d)); d.setDate(d.getDate()+1); }
+      return arr;
+    }
+
+    function paddedDates(start, end){
+      const mondayStart = new Date(start);
+      mondayStart.setDate(start.getDate() - ((start.getDay()+6)%7));
+      const sundayEnd = new Date(end);
+      sundayEnd.setDate(end.getDate() + (6 - ((end.getDay()+6)%7)));
+      return datesInRange(mondayStart, sundayEnd);
+    }
+
+    function allRecordDates(){
+      const keys = Object.keys(records).sort();
+      if(!keys.length) return datesInRange(DEFAULT_START, DEFAULT_END);
+      const first = parseDate(keys[0]) < DEFAULT_START ? parseDate(keys[0]) : DEFAULT_START;
+      const last = parseDate(keys[keys.length-1]) > DEFAULT_END ? parseDate(keys[keys.length-1]) : DEFAULT_END;
+      return datesInRange(first, last);
+    }
+
+    function streaks(){
+      let current=0,best=0,temp=0;
+      const validDates = allRecordDates();
+      validDates.forEach(d=>{
+        const w=records[fmt(d)] || 0;
+        if(w>0){ temp++; best=Math.max(best,temp); } else temp=0;
+      });
+      const t = today();
+      for(let d=new Date(t); ; d.setDate(d.getDate()-1)){
+        const w=records[fmt(d)] || 0;
+        if(w>0) current++;
+        else break;
+        if(current > 2000) break;
+      }
+      return {current,best};
+    }
+
+    function renderHeatmap(){
+      const heatmap=document.getElementById("heatmap"); heatmap.innerHTML="";
+      const [yy,mm] = activeMonth.split("-");
+      document.getElementById("rangeTitle").textContent = `${yy} 年 ${Number(mm)} 月 Writing 活動`;
+
+      paddedDates(viewStart, viewEnd).forEach(d=>{
+        const key=fmt(d);
+        const words=records[key] || 0;
+        const outside = d < viewStart || d > viewEnd;
+        const cell=document.createElement("div");
+        cell.className=`cell ${outside ? "pad" : statusClass(words)}`;
+        cell.title = outside ? "" : `${displayDate(key)} · ${words} 字`;
+        if(!outside){
+          cell.onclick=()=>{ document.getElementById("dateInput").value=key; document.getElementById("wordInput").value=words || ""; };
+        }
+        heatmap.appendChild(cell);
+      });
+    }
+
+    function renderStats(){
+      const all = allRecordDates();
+      const wordsArr = all.map(d=>records[fmt(d)] || 0);
+      const total = wordsArr.reduce((a,b)=>a+b,0);
+      const written = wordsArr.filter(x=>x>0).length;
+      const avg = written ? Math.round(total/written) : 0;
+      const best = Math.max(0,...wordsArr);
+      const st = streaks();
+
+      document.getElementById("totalWords").textContent=total.toLocaleString();
+      document.getElementById("bestWords").textContent=best.toLocaleString();
+      document.getElementById("avgWords").textContent=avg.toLocaleString();
+      document.getElementById("currentStreak").textContent=`${st.current} 天`;
+      document.getElementById("bestStreak").textContent=`${st.best} 天`;
+
+      const rangeDates = datesInRange(viewStart, viewEnd);
+      const rangeWordsArr = rangeDates.map(d=>records[fmt(d)] || 0);
+      const rangeTotal = rangeWordsArr.reduce((a,b)=>a+b,0);
+      const rangeWritten = rangeWordsArr.filter(x=>x>0).length;
+      const rangeFull = rangeWordsArr.filter(x=>x>=1000).length;
+      document.getElementById("writtenDays").textContent=rangeWritten;
+      document.getElementById("fullDays").textContent=rangeFull;
+      document.getElementById("rangeWords").textContent=rangeTotal.toLocaleString();
+      document.getElementById("goalRate").textContent=rangeDates.length ? `${Math.round(rangeFull/rangeDates.length*100)}%` : "0%";
+
+      const todayWords = records[fmt(today())] || 0;
+      document.getElementById("todayStatus").textContent = todayWords>=1000 ? "已達標" : todayWords>0 ? "有寫，未達 1000" : "尚未紀錄";
+
+      const recentKeys = Object.keys(records).sort().reverse().slice(0,5);
+      document.getElementById("recent").innerHTML = recentKeys.length
+        ? "<b>最近紀錄</b><br>" + recentKeys.map(k=>`${displayDate(k)}：${records[k].toLocaleString()} 字`).join("<br>")
+        : "還沒有紀錄。";
+    }
+
+    function render(){ renderHeatmap(); renderStats(); }
+
+    function applyMonth(){
+      const m = document.getElementById("monthPicker").value;
+      if(!m) return alert("請先選月份");
+      setActiveMonth(m);
+      render();
+    }
+
+    function saveEntry(){
+      const date = document.getElementById("dateInput").value;
+      const words = Number(document.getElementById("wordInput").value || 0);
+      if(!date) return alert("請先選日期");
+      records[date]=Math.max(0,Math.floor(words));
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+
+      const d = parseDate(date);
+      if(d < viewStart || d > viewEnd){
+        setActiveMonth(date.slice(0,7));
+      }
+      render();
+    }
+
+    function clearEntry(){
+      const date = document.getElementById("dateInput").value || fmt(today());
+      delete records[date];
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+      document.getElementById("wordInput").value="";
+      render();
+    }
+
+    const now = today();
+    const initialMonth = (now >= DEFAULT_START && now <= DEFAULT_END) ? monthKey(now) : "2026-07";
+    setActiveMonth(initialMonth);
+    document.getElementById("dateInput").value = fmt(today());
+    render();
+  </script>
+</body>
+</html>
